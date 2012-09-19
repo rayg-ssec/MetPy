@@ -1,7 +1,9 @@
 from __future__ import print_function, division
-import distutils.sysconfig
-from distutils.core import setup
-from distutils.extension import Extension
+from setuptools import setup, Extension
+# from setuptools.distutils.command.install_data import install_data
+# import distutils.sysconfig
+# from distutils.core import setup
+# from distutils.extension import Extension
 from distutils.command.install_data import install_data
 import numpy as np
 import os, sys
@@ -49,6 +51,7 @@ import version
 version.write_git_version()
 ver = version.get_version()
 sys.path.pop()
+print(repr(ver))
 
 # Optionally build the gaussian filter code
 if build_gauss:
@@ -81,6 +84,7 @@ setup(
     include_dirs    = include_dirs,
     cmdclass        = {'build_ext':build_ext},
     platforms       = ['Linux'],
+    zip_safe        = False,
     description     = 'Collection of tools for reading, visualizing and'
                       'performing calculations with weather data.',
     url             = 'http://code.forwarn.org/metpy',)

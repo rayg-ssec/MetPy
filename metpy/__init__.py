@@ -8,5 +8,5 @@ import constants
 from calc import *
 from readers.mesonet import *
 
-import version
-__version__ = version.get_version()
+#import version
+#__version__ = version.get_version()
