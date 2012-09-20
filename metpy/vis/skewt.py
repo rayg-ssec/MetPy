@@ -209,6 +209,7 @@ register_projection(SkewXAxes)
 
 
 def plot_skewt(p,h,T,Td, fig=None, ax=None, **kwargs):
+    import matplotlib.pyplot as plt
 
     if fig is None:
         fig = plt.figure(1, figsize=(6.5875, 6.2125))
