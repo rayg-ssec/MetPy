@@ -219,6 +219,13 @@ def plot_skewt(p,h,T,Td, fig=None, ax=None, **kwargs):
 
     plt.grid(True)
 
+#     print "T"
+#     print T
+#     print "Td"
+#     print Td
+#     print "p"
+#     print p
+
     ax.semilogy(T, p, 'r')
     ax.semilogy(Td, p, 'g')
 
