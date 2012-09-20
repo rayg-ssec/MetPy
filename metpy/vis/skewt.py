@@ -207,6 +207,50 @@ class SkewXAxes(Axes):
 # it.
 register_projection(SkewXAxes)
 
+
+def plot_skewt(p,h,T,Td, fig=None, ax=None, **kwargs):
+
+    if fig is None:
+        fig = plt.figure(1, figsize=(6.5875, 6.2125))
+        fig.clf()
+    if ax is None:
+        ax = fig.add_subplot(111, projection='skewx')
+
+    plt.grid(True)
+
+    ax.semilogy(T, p, 'r')
+    ax.semilogy(Td, p, 'g')
+
+    ax.set_yticks(np.linspace(100,1000,10))
+    ax.yaxis.set_major_formatter(ScalarFormatter())
+    ax.set_xticks(np.arange(-80,45,10))
+    ax.set_xlim(-40,45)
+    ax.set_ylim(1050,50)
+
+    T0 = ax.get_xticks()
+    P0 = kwargs.get('P0', 1000.)
+    R = kwargs.get('R', 287.05)
+    Cp = kwargs.get('Cp', 1004.)
+    P = np.linspace(*ax.get_ylim()).reshape(1, -1)
+
+    T = (T0[:,np.newaxis] + 273.15) * (P/P0)**(R/Cp) - 273.15
+    linedata = [np.vstack((t[np.newaxis,:], P)).T for t in T]
+    dry_adiabats = LineCollection(linedata, colors='r', linestyles='dashed',
+        alpha=0.5)
+    ax.add_collection(dry_adiabats)
+
+    w = np.array([0.0004,0.001, 0.002, 0.004, 0.007, 0.01, 0.016, 0.024,
+        0.032]).reshape(-1, 1)
+    e = P * w / (0.622 + w)
+    T = 243.5/(17.67/np.log(e/6.112) - 1)
+    linedata = [np.vstack((t[np.newaxis,:], P)).T for t in T]
+    mixing = LineCollection(linedata, colors='g', linestyles='dashed',
+        alpha=0.8)
+    ax.add_collection(mixing)
+    
+    return fig, ax
+
+
 if __name__ == '__main__':
     # Now make a simple example using the custom projection.
     import matplotlib.pyplot as plt
@@ -310,41 +354,7 @@ if __name__ == '__main__':
     sound_data = StringIO(data_txt)
     p,h,T,Td = np.loadtxt(sound_data, usecols=range(0,4), unpack=True)
 
-    fig = plt.figure(1, figsize=(6.5875, 6.2125))
-    fig.clf()
-    ax = fig.add_subplot(111, projection='skewx')
-
-    plt.grid(True)
-
-    ax.semilogy(T, p, 'r')
-    ax.semilogy(Td, p, 'g')
-
-    ax.set_yticks(np.linspace(100,1000,10))
-    ax.yaxis.set_major_formatter(ScalarFormatter())
-    ax.set_xticks(np.arange(-80,45,10))
-    ax.set_xlim(-40,45)
-    ax.set_ylim(1050,100)
-
-    T0 = ax.get_xticks()
-    P0 = 1000.
-    R = 287.05
-    Cp = 1004.
-    P = np.linspace(*ax.get_ylim()).reshape(1, -1)
-
-    T = (T0[:,np.newaxis] + 273.15) * (P/P0)**(R/Cp) - 273.15
-    linedata = [np.vstack((t[np.newaxis,:], P)).T for t in T]
-    dry_adiabats = LineCollection(linedata, colors='r', linestyles='dashed',
-        alpha=0.5)
-    ax.add_collection(dry_adiabats)
-
-    w = np.array([0.0004,0.001, 0.002, 0.004, 0.007, 0.01, 0.016, 0.024,
-        0.032]).reshape(-1, 1)
-    e = P * w / (0.622 + w)
-    T = 243.5/(17.67/np.log(e/6.112) - 1)
-    linedata = [np.vstack((t[np.newaxis,:], P)).T for t in T]
-    mixing = LineCollection(linedata, colors='g', linestyles='dashed',
-        alpha=0.8)
-    ax.add_collection(mixing)
+    fig, ax = plot_skewt(p,h,T,Td)
 
 #    Lv = 2.4e6
 #    T = T[:,0][:,np.newaxis] * (P/P0)**(R/Cp) - (Lv/Cp) * w
