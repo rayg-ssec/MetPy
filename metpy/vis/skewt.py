@@ -208,6 +208,146 @@ class SkewXAxes(Axes):
 register_projection(SkewXAxes)
 
 
+def moist_lapserate(w, T):
+    # From AMS glossary,
+    # http://glossary.ametsoc.org/wiki/Moist-adiabatic_lapse_rate
+
+    # the constants are hardcoded to match consts in plot_skewt - 
+    # probably this ought to be refactored to group all atmo 
+    # related consts into one common location
+
+    # copied from Wallace & Hobbs 2nd edition, page 467,468
+    g = 9.81
+    Cp = 1004
+    Rd = 287.0
+    Rv = 461.51
+    epsilon = Rd/Rv
+    T0 = 273.15
+
+    # assumes T is in deg C; this is a linear interp/extrap from:
+    # Lv = 2.5e6 (O deg C) and 2.0e6 (100 deg C)
+    Lv_func = lambda T: 2.5e6 - 2500.0 * T
+    # alternate form (Glanz and Orlob 1973, 
+    # B. Henderson-Sellers 1984 QJRMS
+    #Lv_func = lambda T: 1.91846e6 * ((T+T0)/(T+T0-33.91))**2
+
+    TK = T + T0
+    Lv = Lv_func(T)
+    A = Lv * w / (Rd*TK)
+    return g * (1 + A) / (Cp + Lv * epsilon * A / TK)
+
+def moist_pseudo_lapserate(w, T):
+    # From AMS glossary,
+    # http://glossary.ametsoc.org/wiki/Pseudoadiabatic_lapse_rate
+
+    # the constants are hardcoded to match consts in plot_skewt - 
+    # probably this ought to be refactored to group all atmo 
+    # related consts into one common location
+
+    # copied from Wallace & Hobbs 2nd edition, page 467,468
+    g = 9.81
+    Cp = 1004
+    Cv = 717
+    Rd = 287.0
+    Rv = 461.51
+    epsilon = Rd/Rv
+    T0 = 273.15
+
+    # assumes T is in deg C; this is a linear interp/extrap from:
+    # Lv = 2.5e6 (O deg C) and 2.0e6 (100 deg C)
+    Lv_func = lambda T: 2.5e6 - 2500.0 * T
+    # alternate form (Glanz and Orlob 1973, 
+    # B. Henderson-Sellers 1984 QJRMS)
+    #Lv_func = lambda T: 1.91846e6 * (T/(T-33.91))**2
+
+    TK = T + T0
+    Lv = Lv_func(T)
+    A = Lv * w / (Rd*TK)
+    return g * ( (1 + w) * (1 + A) / 
+                 (Cp + w*Cv + Lv * (epsilon + w) * A / TK) )
+
+
+def calc_moist_adiabat(Tref, P):
+
+    # the constants are hardcoded to match consts in plot_skewt - 
+    # probably this ought to be refactored to group all atmo 
+    # related consts into one common location
+
+    # copied from Wallace & Hobbs 2nd edition, page 467,468
+    g = 9.81
+    Cp = 1004
+    Rd = 287.0
+    Rv = 461.51
+    epsilon = Rd/Rv
+    T0 = 273.15
+
+    T = np.zeros(P.shape)
+    T[0] = Tref
+    # want "upward" P - e.g. P should be decreasing. Assume it is monotonic 
+    # and flip it if needed.
+    if P[0]<P[1]:
+        uP = P[::-1]
+    else:
+        uP = P
+    dP = uP[:-1] - uP[1:]
+
+    for n in range(1,P.shape[0]):
+        # First, find the thickness, in m, of the layer with pressure 
+        # thickess given by dP, but assuming the T and wv pressure from 
+        # the level at the bottom of the layer.
+
+        # using same approx as used below in plot_skewt() to plot the mixing 
+        # ratio lines (though I am unsure of the source)
+        # May want to modify to use the MK approximation.
+        wv_sat = 6.112 * np.exp(17.67 * T[n-1] / (243.5 + T[n-1]))
+        # wv_sat = wv_satpressure_mk(T[n-1])
+
+        # Following Wallace & Hobbs, page 80, 2nd ed.
+        # find mixing ratio from dewpoint and then virtual temp
+        w = epsilon * wv_sat / (uP[n-1] - wv_sat)
+        Tv = (T[n-1] + T0) * (1 + ((1-epsilon)/epsilon) * w)
+        rho = uP[n-1] / (Rd * Tv)
+        Dz = dP[n-1] / rho / g
+
+        # second, compute the lapse rate, and then combine with the 
+        # thickess to get the temperate at the level at the top of the layer.
+        Gamma = moist_lapserate(w, T[n-1])
+        T[n] = T[n-1] - Gamma * Dz
+
+        # Now that we have the temp at layer top, repeat calculation at midpt, 
+        # using the average layer temp (I think this is slightly more correct)
+        Tbar = 0.5*(T[n-1] + T[n])
+        Pbar = 0.5*(uP[n-1] + uP[n])
+        wv_sat = 6.112 * np.exp(17.67 * Tbar / (243.5 + Tbar))
+        w = epsilon * wv_sat / (Pbar - wv_sat)
+        Tv = (Tbar + T0) * (1 + ((1-epsilon)/epsilon) * w)
+        rho = Pbar / (Rd * Tv)
+        Dz = dP[n-1] / rho / g
+        Gamma = moist_lapserate(w, Tbar)
+        T[n] = T[n-1] - Gamma * Dz
+
+    return T
+
+def wv_satpressure_mk(T):
+    """ es = wv_satpressure_mk(T):
+    Compute saturation vapor pressure, with respect to liquid water. The 
+    result is given in hPa, from an input temperature in degrees C. This 
+    approximation is valid for typical atmospheric temperatures.
+    
+    Uses formula from Murphy and Koop, 2005, 
+    Q. J. Royal Met. Soc. 131, 1539-1565.
+    As suggested by http://cires.colorado.edu/~voemel/vp.html
+
+    """
+
+    TK = T + 273.15
+    log_es = 54.842763 - 6763.22/TK - 4.21*np.log(TK) + 0.000367*TK + \
+        np.tanh(0.0415*(TK-218.8)) * \
+        (53.878 - 1331.22/TK - 9.44523*np.log(TK) + 0.014025*TK)
+    # M&K equation returns [Pa], so convert to [hPa]
+    es = np.exp(log_es) / 100;
+    return es
+
 def plot_skewt(p,h,T,Td, fig=None, ax=None, **kwargs):
     import matplotlib.pyplot as plt
 
@@ -236,16 +376,49 @@ def plot_skewt(p,h,T,Td, fig=None, ax=None, **kwargs):
     ax.set_ylim(1050,50)
 
     T0 = ax.get_xticks()
-    P0 = kwargs.get('P0', 1000.)
+
+    # allowing P0 to be redefined causes headaches for the moist 
+    # adiabats, so don't allow it.
+    P0 = 1000.
     R = kwargs.get('R', 287.05)
     Cp = kwargs.get('Cp', 1004.)
-    P = np.linspace(*ax.get_ylim()).reshape(1, -1)
 
-    T = (T0[:,np.newaxis] + 273.15) * (P/P0)**(R/Cp) - 273.15
+    # easier if we start at 1000 and just add the 1050 (see discussion 
+    # below with moist adiabats)
+    # Note this re-hardcodes the ylimit which is not so great.
+    P = np.r_[1050, np.linspace(1000, 50)]
+    P = P.reshape(1, -1)
+
+    # I think it makes more sense to plot starting from xticks and then 
+    # extrapolate to a wider range with the same tick increment size
+    DT = T0[1]-T0[0]
+    adiabat_Ts = np.r_[T0, T0[-1] + np.arange(1,10)*DT]
+    T = (adiabat_Ts[:,np.newaxis] + 273.15) * (P/P0)**(R/Cp) - 273.15
     linedata = [np.vstack((t[np.newaxis,:], P)).T for t in T]
     dry_adiabats = LineCollection(linedata, colors='r', linestyles='dashed',
-        alpha=0.5)
+                                  alpha=0.5)
     ax.add_collection(dry_adiabats)
+
+    # add moist adiabats
+    # Now, we need T to be equal to the ticks (T0) at P=1000 
+    # (the reference pressure). So, the trick here is to do it in 
+    # two steps (integrate up from P=1000 to top of profile) and 
+    # once downward (from P = 1000 to 1050). For the downward, compute 
+    # lapse rate at 1000 and assume it is linear in that segment.
+    P1000 = np.array([1001.0, 1000.0])
+    # also don't need as many T's here (the moist will move off the right 
+    # edge of the plot pretty quickly)
+    adiabat_Ts = np.r_[T0, T0[-1] + np.arange(1,3)*DT]
+    T = np.zeros( (adiabat_Ts.shape[0], P.shape[1]) )
+    for n in range(adiabat_Ts.shape[0]):
+        T[n,1:] = calc_moist_adiabat(adiabat_Ts[n], P[0,1:])
+        tmpT = calc_moist_adiabat(adiabat_Ts[n], P1000)
+        T[n,0] = T[n,1] + (tmpT[0]-tmpT[1]) * 50.0
+
+    linedata = [np.vstack((t[np.newaxis,:], P)).T for t in T]
+    moist_adiabats = LineCollection(linedata, colors='r', 
+                                    linestyles='dotted', alpha=0.5)
+    ax.add_collection(moist_adiabats)
 
     w = np.array([0.0004,0.001, 0.002, 0.004, 0.007, 0.01, 0.016, 0.024,
         0.032]).reshape(-1, 1)
